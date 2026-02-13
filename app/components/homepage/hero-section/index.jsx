@@ -1,7 +1,6 @@
 // @flow strict
 
 import { personalData } from "@/utils/data/personal-data";
-import Image from "next/image";
 import Link from "next/link";
 import { BsGithub, BsLinkedin } from "react-icons/bs";
 import { FaFacebook, FaTwitterSquare } from "react-icons/fa";
@@ -12,13 +11,13 @@ import { SiLeetcode } from "react-icons/si";
 function HeroSection() {
   return (
     <section className="relative flex flex-col items-center justify-between py-4 lg:py-12">
-      <Image
+      <img
         src="/hero.svg"
         alt="Hero"
         width={1572}
         height={795}
         className="absolute -top-[98px] -z-10"
-        priority
+        style={{ width: '1572px', height: '795px' }}
       />
 
       <div className="grid grid-cols-1 items-start lg:grid-cols-2 lg:gap-12 gap-y-8">

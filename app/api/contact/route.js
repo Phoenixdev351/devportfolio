@@ -6,8 +6,7 @@ import nodemailer from 'nodemailer';
 let transporter = null;
 if (process.env.EMAIL_ADDRESS && process.env.GMAIL_PASSKEY) {
   transporter = nodemailer.createTransport({
-    service: 'gmail',
-    host: 'smtp.gmail.com',
+    host: 'smtp.office365.com',
     port: 587,
     secure: false,
     auth: {
@@ -15,6 +14,7 @@ if (process.env.EMAIL_ADDRESS && process.env.GMAIL_PASSKEY) {
       pass: process.env.GMAIL_PASSKEY,
     },
   });
+  console.info('Nodemailer transporter configured for Outlook/Office365 SMTP');
 } else {
   console.warn('Email credentials not configured: EMAIL_ADDRESS or GMAIL_PASSKEY missing. Emails will be skipped.');
 }
@@ -70,9 +70,11 @@ async function sendEmail(payload, message) {
   
   try {
     await transporter.sendMail(mailOptions);
+    console.info('Email sent successfully to:', process.env.EMAIL_ADDRESS);
     return true;
   } catch (error) {
     console.error('Error while sending email:', error?.message || error);
+    console.error('Full error:', error);
     return false;
   }
 };
