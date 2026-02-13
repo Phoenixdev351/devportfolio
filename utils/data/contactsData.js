@@ -1,5 +1,5 @@
 export const contactsData = {
-    email: 'phoenix.dev@outlook.com',
+    email: 'phoenix.dev351@outlook.com',
     // phone: '+8801608797655',
     address: 'Jalan Kiara, Mont Kiara, 50480 Kuala Lumpur, Malaysia',
     github: 'https://github.com/Phoenixdev351',
