@@ -1,5 +1,4 @@
 // @flow strict
-'use client';
 
 import { personalData } from "@/utils/data/personal-data";
 import Image from "next/image";
@@ -12,7 +11,7 @@ import { SiLeetcode } from "react-icons/si";
 
 function HeroSection() {
   return (
-    <section className="relative flex flex-col items-center justify-between py-4 lg:py-12" suppressHydrationWarning>
+    <section className="relative flex flex-col items-center justify-between py-4 lg:py-12">
       <Image
         src="/hero.svg"
         alt="Hero"
@@ -32,7 +31,6 @@ function HeroSection() {
             <span className=" text-[#16f2b3]">{personalData.designation}</span>
             .
           </h1>
-
           <div className="my-12 flex items-center gap-5">
             {personalData.github && (
               <Link

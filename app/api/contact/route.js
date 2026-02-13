@@ -2,17 +2,22 @@ import axios from 'axios';
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 
-// Create and configure Nodemailer transporter
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, 
-  auth: {
-    user: process.env.EMAIL_ADDRESS,
-    pass: process.env.GMAIL_PASSKEY, 
-  },
-});
+// Create and configure Nodemailer transporter only when env vars are present
+let transporter = null;
+if (process.env.EMAIL_ADDRESS && process.env.GMAIL_PASSKEY) {
+  transporter = nodemailer.createTransport({
+    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: process.env.EMAIL_ADDRESS,
+      pass: process.env.GMAIL_PASSKEY,
+    },
+  });
+} else {
+  console.warn('Email credentials not configured: EMAIL_ADDRESS or GMAIL_PASSKEY missing. Emails will be skipped.');
+}
 
 // Helper function to send a message via Telegram
 async function sendTelegramMessage(token, chat_id, message) {
@@ -49,9 +54,14 @@ const generateEmailTemplate = (name, email, userMessage) => `
 async function sendEmail(payload, message) {
   const { name, email, message: userMessage } = payload;
   
+  if (!transporter) {
+    console.warn('sendEmail called but transporter is not configured.');
+    return false;
+  }
+
   const mailOptions = {
-    from: "Portfolio", 
-    to: process.env.EMAIL_ADDRESS, 
+    from: `${name} via Portfolio <${process.env.EMAIL_ADDRESS || 'no-reply@example.com'}>`, 
+    to: process.env.EMAIL_ADDRESS,
     subject: `New Message From ${name}`, 
     text: message, 
     html: generateEmailTemplate(name, email, userMessage), 
@@ -62,7 +72,7 @@ async function sendEmail(payload, message) {
     await transporter.sendMail(mailOptions);
     return true;
   } catch (error) {
-    console.error('Error while sending email:', error.message);
+    console.error('Error while sending email:', error?.message || error);
     return false;
   }
 };
@@ -74,38 +84,50 @@ export async function POST(request) {
     const token = process.env.TELEGRAM_BOT_TOKEN;
     const chat_id = process.env.TELEGRAM_CHAT_ID;
 
-    // Validate environment variables
-    if (!token || !chat_id) {
-      return NextResponse.json({
-        success: false,
-        message: 'Telegram token or chat ID is missing.',
-      }, { status: 400 });
+    const summary = [];
+
+    const composedMessage = `New message from ${name}\n\nEmail: ${email}\n\nMessage:\n\n${userMessage}\n\n`;
+
+    // Try to send Telegram message if configured
+    let telegramSuccess = false;
+    if (token && chat_id) {
+      telegramSuccess = await sendTelegramMessage(token, chat_id, composedMessage);
+      summary.push(`telegram:${telegramSuccess}`);
+    } else {
+      console.info('Telegram not configured; skipping Telegram notification.');
     }
 
-    const message = `New message from ${name}\n\nEmail: ${email}\n\nMessage:\n\n${userMessage}\n\n`;
+    // Try to send email if transporter is available
+    let emailSuccess = false;
+    if (transporter) {
+      emailSuccess = await sendEmail(payload, composedMessage);
+      summary.push(`email:${emailSuccess}`);
+    } else {
+      console.info('Email transporter not configured; skipping email notification.');
+    }
 
-    // Send Telegram message
-    const telegramSuccess = await sendTelegramMessage(token, chat_id, message);
+    // Determine overall success: at least one channel should succeed
+    const overallSuccess = telegramSuccess || emailSuccess;
 
-    // Send email
-    const emailSuccess = await sendEmail(payload, message);
-
-    if (telegramSuccess && emailSuccess) {
+    if (overallSuccess) {
       return NextResponse.json({
         success: true,
-        message: 'Message and email sent successfully!',
+        message: 'Notification sent (one or more channels succeeded).',
+        detail: summary,
       }, { status: 200 });
     }
 
     return NextResponse.json({
       success: false,
-      message: 'Failed to send message or email.',
+      message: 'Failed to send via any configured channel.',
+      detail: summary,
     }, { status: 500 });
   } catch (error) {
-    console.error('API Error:', error.message);
+    console.error('API Error:', error?.message || error);
     return NextResponse.json({
       success: false,
       message: 'Server error occurred.',
+      error: String(error),
     }, { status: 500 });
   }
 };

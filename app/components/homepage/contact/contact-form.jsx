@@ -35,12 +35,13 @@ function ContactForm() {
 
     try {
       setIsLoading(true);
-      const res = await axios.post(
-        `${process.env.NEXT_PUBLIC_APP_URL}/api/contact`,
-        userInput
-      );
+      const res = await axios.post('/api/contact', userInput);
 
-      toast.success("Message sent successfully!");
+      if (res?.data?.success) {
+        toast.success(res.data.message || 'Message sent successfully!');
+      } else {
+        toast.error(res?.data?.message || 'Failed to send message.');
+      }
       setUserInput({
         name: "",
         email: "",
