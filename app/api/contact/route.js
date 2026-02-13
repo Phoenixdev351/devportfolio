@@ -2,9 +2,12 @@ import axios from 'axios';
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 
-// Create and configure Nodemailer transporter only when env vars are present
+// Use Resend for email (free tier, no SMTP issues)
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+
+// Create and configure Nodemailer transporter (fallback if Resend not available)
 let transporter = null;
-if (process.env.EMAIL_ADDRESS && process.env.GMAIL_PASSKEY) {
+if (process.env.EMAIL_ADDRESS && process.env.GMAIL_PASSKEY && !RESEND_API_KEY) {
   transporter = nodemailer.createTransport({
     host: 'smtp.office365.com',
     port: 587,
@@ -15,8 +18,8 @@ if (process.env.EMAIL_ADDRESS && process.env.GMAIL_PASSKEY) {
     },
   });
   console.info('Nodemailer transporter configured for Outlook/Office365 SMTP');
-} else {
-  console.warn('Email credentials not configured: EMAIL_ADDRESS or GMAIL_PASSKEY missing. Emails will be skipped.');
+} else if (!RESEND_API_KEY) {
+  console.warn('Email credentials not configured: Set RESEND_API_KEY or EMAIL_ADDRESS + GMAIL_PASSKEY');
 }
 
 // Helper function to send a message via Telegram
@@ -50,8 +53,46 @@ const generateEmailTemplate = (name, email, userMessage) => `
   </div>
 `;
 
-// Helper function to send an email via Nodemailer
-async function sendEmail(payload, message) {
+// Helper function to send email via Resend API
+async function sendEmailResend(payload, message) {
+  const { name, email, message: userMessage } = payload;
+  
+  if (!RESEND_API_KEY) {
+    console.warn('Resend API key not configured.');
+    return false;
+  }
+
+  const htmlContent = generateEmailTemplate(name, email, userMessage);
+
+  try {
+    const response = await axios.post(
+      'https://api.resend.com/emails',
+      {
+        from: `Portfolio <onboarding@resend.dev>`,
+        to: process.env.EMAIL_ADDRESS || 'delivered@resend.dev',
+        replyTo: email,
+        subject: `New Message From ${name}`,
+        html: htmlContent,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    console.info('Email sent via Resend successfully to:', process.env.EMAIL_ADDRESS);
+    return true;
+  } catch (error) {
+    console.error('Error while sending email via Resend:', error?.message || error);
+    console.error('Full error:', error?.response?.data || error);
+    return false;
+  }
+}
+
+// Helper function to send an email via Nodemailer (fallback)
+async function sendEmailNodemailer(payload, message) {
   const { name, email, message: userMessage } = payload;
   
   if (!transporter) {
@@ -70,14 +111,14 @@ async function sendEmail(payload, message) {
   
   try {
     await transporter.sendMail(mailOptions);
-    console.info('Email sent successfully to:', process.env.EMAIL_ADDRESS);
+    console.info('Email sent via Nodemailer successfully to:', process.env.EMAIL_ADDRESS);
     return true;
   } catch (error) {
-    console.error('Error while sending email:', error?.message || error);
+    console.error('Error while sending email via Nodemailer:', error?.message || error);
     console.error('Full error:', error);
     return false;
   }
-};
+}
 
 export async function POST(request) {
   try {
@@ -87,6 +128,7 @@ export async function POST(request) {
     const chat_id = process.env.TELEGRAM_CHAT_ID;
 
     const summary = [];
+    const errors = [];
 
     const composedMessage = `New message from ${name}\n\nEmail: ${email}\n\nMessage:\n\n${userMessage}\n\n`;
 
@@ -99,13 +141,28 @@ export async function POST(request) {
       console.info('Telegram not configured; skipping Telegram notification.');
     }
 
-    // Try to send email if transporter is available
+    // Try to send email if Resend or transporter is available
     let emailSuccess = false;
-    if (transporter) {
-      emailSuccess = await sendEmail(payload, composedMessage);
-      summary.push(`email:${emailSuccess}`);
+    if (RESEND_API_KEY) {
+      try {
+        emailSuccess = await sendEmailResend(payload, composedMessage);
+        summary.push(`email(resend):${emailSuccess}`);
+      } catch (emailError) {
+        console.error('Caught Resend email error:', emailError?.message || emailError);
+        errors.push(`email(resend): ${emailError?.message || emailError}`);
+        summary.push('email(resend):false');
+      }
+    } else if (transporter) {
+      try {
+        emailSuccess = await sendEmailNodemailer(payload, composedMessage);
+        summary.push(`email(nodemailer):${emailSuccess}`);
+      } catch (emailError) {
+        console.error('Caught Nodemailer email error:', emailError?.message || emailError);
+        errors.push(`email(nodemailer): ${emailError?.message || emailError}`);
+        summary.push('email(nodemailer):false');
+      }
     } else {
-      console.info('Email transporter not configured; skipping email notification.');
+      console.info('Email not configured (no Resend API key or Nodemailer setup); skipping email notification.');
     }
 
     // Determine overall success: at least one channel should succeed
@@ -123,13 +180,14 @@ export async function POST(request) {
       success: false,
       message: 'Failed to send via any configured channel.',
       detail: summary,
+      errors: errors.length > 0 ? errors : 'No detailed errors captured',
     }, { status: 500 });
   } catch (error) {
     console.error('API Error:', error?.message || error);
     return NextResponse.json({
       success: false,
       message: 'Server error occurred.',
-      error: String(error),
+      error: String(error?.message || error),
     }, { status: 500 });
   }
 };
