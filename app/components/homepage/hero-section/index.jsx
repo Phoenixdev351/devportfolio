@@ -3,7 +3,7 @@
 
 import { personalData } from "@/utils/data/personal-data";
 import Link from "next/link";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BsGithub, BsLinkedin } from "react-icons/bs";
 import { FaFacebook, FaTwitterSquare } from "react-icons/fa";
 import { MdDownload } from "react-icons/md";
@@ -11,6 +11,12 @@ import { RiContactsFill } from "react-icons/ri";
 import { SiLeetcode } from "react-icons/si";
 
 function HeroSection() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <section className="relative flex flex-col items-center justify-between py-4 lg:py-12">
       <img
@@ -19,7 +25,6 @@ function HeroSection() {
         width={1572}
         height={795}
         className="absolute -top-[98px] -z-10"
-        style={{ width: '1572px', height: '795px' }}
       />
 
       <div className="grid grid-cols-1 items-start lg:grid-cols-2 lg:gap-12 gap-y-8">
@@ -33,7 +38,7 @@ function HeroSection() {
             .
           </h1>
           <div className="my-12 flex items-center gap-5">
-            {personalData.github && (
+            {mounted && personalData.github && (
               <Link
                 href={personalData.github}
                 target='_blank'
@@ -42,7 +47,7 @@ function HeroSection() {
                 <BsGithub size={30} />
               </Link>
             )}
-            {personalData.linkedIn && (
+            {mounted && personalData.linkedIn && (
               <Link
                 href={personalData.linkedIn}
                 target='_blank'
@@ -51,7 +56,7 @@ function HeroSection() {
                 <BsLinkedin size={30} />
               </Link>
             )}
-            {personalData.facebook && (
+            {mounted && personalData.facebook && (
               <Link
                 href={personalData.facebook}
                 target='_blank'
@@ -60,7 +65,7 @@ function HeroSection() {
                 <FaFacebook size={30} />
               </Link>
             )}
-            {personalData.leetcode && (
+            {mounted && personalData.leetcode && (
               <Link
                 href={personalData.leetcode}
                 target='_blank'
@@ -69,7 +74,7 @@ function HeroSection() {
                 <SiLeetcode size={30} />
               </Link>
             )}
-            {personalData.twitter && (
+            {mounted && personalData.twitter && (
               <Link
                 href={personalData.twitter}
                 target='_blank'
